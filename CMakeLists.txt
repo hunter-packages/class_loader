@@ -1,5 +1,17 @@
 cmake_minimum_required(VERSION 3.5)
-project(class_loader CXX)
+
+include(cmake/HunterGate.cmake)
+HunterGate(
+    URL "https://github.com/ruslo/hunter/archive/v0.23.186.tar.gz"
+    SHA1 "b215dc4d88cbe6cc74b5cc9fa9cdd7058775c26b"
+)
+
+project(class_loader)
+
+hunter_add_package(Boost COMPONENTS thread system)
+hunter_add_package(catkin)
+hunter_add_package(PocoCpp)
+hunter_add_package(ros_console_bridge)
 
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
@@ -9,7 +21,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-find_package(Boost REQUIRED COMPONENTS thread system)
+find_package(Boost CONFIG REQUIRED COMPONENTS thread system)
 
 set(CATKIN_DISABLED false CACHE BOOL "Disable the catkin build, useful if catkin is present but a build outside of ros is done")
 if(NOT CATKIN_DISABLED)
@@ -19,12 +31,12 @@ endif()
 find_package(console_bridge REQUIRED)
 
 if(${catkin_FOUND})
-  find_package(catkin REQUIRED COMPONENTS cmake_modules)
-  find_package(Poco REQUIRED COMPONENTS Foundation)
+  find_package(Poco REQUIRED Foundation CONFIG)
+  set(PROJECT_INSTALLSPACE_LIBRARIES ros::${PROJECT_NAME})
   catkin_package(
     INCLUDE_DIRS include
-    LIBRARIES ${PROJECT_NAME} ${Poco_LIBRARIES}
-    DEPENDS Boost Poco console_bridge
+    LIBRARIES ${PROJECT_NAME}
+    DEPENDS "Boost COMPONENTS thread system" "Poco COMPONENTS Foundation CONFIG" console_bridge
     CFG_EXTRAS class_loader-extras.cmake
   )
 else()
@@ -54,7 +66,7 @@ set(${PROJECT_NAME}_HDRS
   include/class_loader/register_macro.hpp
 )
 add_library(${PROJECT_NAME} ${${PROJECT_NAME}_SRCS} ${${PROJECT_NAME}_HDRS})
-target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES} ${console_bridge_LIBRARIES} ${Poco_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} Boost::boost Boost::thread Boost::system ros::console_bridge Poco::Foundation)
 if(WIN32)
   # Causes the visibility macros to use dllexport rather than dllimport
   # which is appropriate when building the dll but not consuming it.
@@ -62,6 +74,7 @@ if(WIN32)
 endif()
 
 install(TARGETS ${PROJECT_NAME}
+  EXPORT ${PROJECT_NAME}Targets
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION})
@@ -70,6 +83,10 @@ install(DIRECTORY include/class_loader/
 
 install(PROGRAMS scripts/class_loader_headers_update.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+
+install(EXPORT ${PROJECT_NAME}Targets
+    DESTINATION share/${PROJECT_NAME}/cmake
+    NAMESPACE ros::)
 
 if(CATKIN_ENABLE_TESTING)
   add_subdirectory(test)
